@@ -1,5 +1,6 @@
 package com.naukri.imagecropper;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -10,6 +11,8 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
+
+import com.naukri.imagecropper.util.FileUtil;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -55,11 +58,14 @@ public class Croper extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        // draw image.
-        drawImage(canvas);
-        // Un-Selected portion.
-        drawShadowEffect(canvas);
-        drawSelection(canvas);
+
+        if(bitmap != null) {
+            // draw image.
+            drawImage(canvas);
+            // Un-Selected portion.
+            drawShadowEffect(canvas);
+            drawSelection(canvas);
+        }
     }
 
     /**
@@ -641,67 +647,95 @@ public class Croper extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
 
-        try {
-            setRectangleSize();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-            Toast.makeText(getContext(), "Image not found at specified loation", Toast.LENGTH_SHORT).show();
-        }
+//        try {
+        setRectangleSize(w, h);
+//        }
+//        catch (FileNotFoundException e) {
+//            e.printStackTrace();
+//            Toast.makeText(getContext(), "Image not found at specified loation", Toast.LENGTH_SHORT).show();
+//        }
     }
 
     /**
      * Set rectangle size.
      */
-    private void setRectangleSize() throws FileNotFoundException {
+    private void setRectangleSize(int width, int height)
+    {
+        try {
+            bitmap = FileUtil.decodeSampledBitmapFromResource(readLocation, width, height);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-        bitmap = BitmapFactory.decodeStream(new FileInputStream(new File(readLocation)));
-        imageCordinate.width = bitmap.getWidth();
-        imageCordinate.height = bitmap.getHeight();
-        boolean isSizeGreater = false;
-        // check image size is greated than screen size or not.
-        if (imageCordinate.width > getWidth() || imageCordinate.height > getHeight()) {
-            isSizeGreater = true;
+        if(bitmap == null)
+        {
+            Activity cropperActivity = (Activity) getContext();
+            cropperActivity.setResult(Activity.RESULT_CANCELED);
+            cropperActivity.finish();
         }
-        // if image size is greated than screen size, then reduce the image size according the aspect ratio of image.
-        if (isSizeGreater) {
-            // ratioY = screenHeight / Image Height.
-            float ratioY = (getHeight() / imageCordinate.height);
-            // ratioX = screenWidth / Image Width;
-            float ratioX = (getWidth() / imageCordinate.width);
-            // get min ration, so image can fit in screen.
-            float aspectRatio = Math.min(ratioX, ratioY);
-            // calculate new image size.
-            imageCordinate.width = (aspectRatio * imageCordinate.width);
-            imageCordinate.height = (aspectRatio * imageCordinate.height);
-            // resize image bitmap according to new size.
-            bitmap = Bitmap.createScaledBitmap(bitmap, (int) imageCordinate.width, (int) imageCordinate.height, false);
+        else {
+            imageCordinate.width = bitmap.getWidth();
+            imageCordinate.height = bitmap.getHeight();
+
+            boolean isSizeGreater = false;
+
+            // check image size is greated than screen size or not.
+            if (imageCordinate.width > getWidth() || imageCordinate.height > getHeight()) {
+                isSizeGreater = true;
+            }
+
+            // if image size is greated than screen size, then reduce the image size according the aspect ratio of image.
+            if (isSizeGreater) {
+                // ratioY = screenHeight / Image Height.
+                float ratioY = (getHeight() / imageCordinate.height);
+
+                // ratioX = screenWidth / Image Width;
+                float ratioX = (getWidth() / imageCordinate.width);
+
+                // get min ration, so image can fit in screen.
+                float aspectRatio = Math.min(ratioX, ratioY);
+
+                // calculate new image size.
+                imageCordinate.width = (aspectRatio * imageCordinate.width);
+                imageCordinate.height = (aspectRatio * imageCordinate.height);
+
+                // resize image bitmap according to new size.
+                bitmap = Bitmap.createScaledBitmap(bitmap, (int) imageCordinate.width, (int) imageCordinate.height, false);
+            }
+
+            // get Image starting X,Y co-ordinate.
+            imageCordinate.startX = ((getWidth() - imageCordinate.width) / 2);
+            imageCordinate.startY = ((getHeight() - imageCordinate.height) / 2);
+            imageCordinate.endX = (imageCordinate.startX + imageCordinate.width);
+            imageCordinate.endY = (imageCordinate.startY + imageCordinate.height);
+
+            float size = imageCordinate.height;
+            if (imageCordinate.height > imageCordinate.width) {
+                size = imageCordinate.width;
+            }
+
+            int sideSpace = (int) (size * 0.10f);
+            size = (size - (2 * sideSpace));
+
+            MIN_HEIGHT = size / 5;
+            MIN_WIDTH = size / 5;
+            MARGIN = (int) (size / 20);
+
+            // set changable values.
+            pointChange.left = imageCordinate.startX + sideSpace;
+            pointChange.top = imageCordinate.startY + sideSpace;
+            pointChange.right = pointChange.left + size;
+            pointChange.bottom = pointChange.top + size;
+
+            // set position variables
+            pointPosition.left = pointChange.left;
+            pointPosition.right = pointChange.right;
+            pointPosition.bottom = pointChange.bottom;
+            pointPosition.top = pointChange.top;
+
+            // set height and width of rectangle.
+            pointPosition.width = size;
+            pointPosition.height = size;
         }
-        // get Image starting X,Y co-ordinate.
-        imageCordinate.startX = ((getWidth() - imageCordinate.width) / 2);
-        imageCordinate.startY = ((getHeight() - imageCordinate.height) / 2);
-        imageCordinate.endX = (imageCordinate.startX + imageCordinate.width);
-        imageCordinate.endY = (imageCordinate.startY + imageCordinate.height);
-        float size = imageCordinate.height;
-        if (imageCordinate.height > imageCordinate.width) {
-            size = imageCordinate.width;
-        }
-        int sideSpace = (int) (size * 0.10f);
-        size = (size - (2 * sideSpace));
-        MIN_HEIGHT = size / 3;
-        MIN_WIDTH = size / 3;
-        MARGIN = (int) (size / 10);
-        // set changable values.
-        pointChange.left = imageCordinate.startX + sideSpace;
-        pointChange.top = imageCordinate.startY + sideSpace;
-        pointChange.right = pointChange.left + size;
-        pointChange.bottom = pointChange.top + size;
-        // set position variables
-        pointPosition.left = pointChange.left;
-        pointPosition.right = pointChange.right;
-        pointPosition.bottom = pointChange.bottom;
-        pointPosition.top = pointChange.top;
-        // set height and width of rectangle.
-        pointPosition.width = size;
-        pointPosition.height = size;
     }
 }
